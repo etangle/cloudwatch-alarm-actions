@@ -1,0 +1,49 @@
+service: serverless-alarm-window
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: ${opt:stage, 'dev'}
+  region: ap-southeast-2
+  vpc:
+    securityGroupIds:
+      - ${env:SecurityGroup}
+    subnetIds:
+      - ${env:SubnetA}
+      - ${env:SubnetB}
+      - ${env:SubnetC}
+  deploymentBucket:
+    name: bucket-${self:provider.stage}-serverless-deploys
+    blockPublicAccess: true
+    serverSideEncryption: AES256
+  environment:
+    ALARMS: "${ssm:/ecomm/AlarmNames}"
+    SNS_TOPIC_ARN: "arn:aws:sns:#{AWS::Region}:#{AWS::AccountId}:cloudwatch-alarms"
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action: "sns:Publish"
+          Resource: ${self:provider.environment.SNS_TOPIC_ARN}
+        - Effect: "Allow"
+          Action:
+            - "cloudwatch:DescribeAlarms"
+            - "cloudwatch:DisableAlarmActions"
+            - "cloudwatch:EnableAlarmActions"
+            - "logs:CreateLogGroup"
+            - "logs:DescribeLogGroups"
+            - "logs:PutLogEvents"
+          Resource: "*"
+plugins:
+  - serverless-pseudo-parameters
+  - serverless-deployment-bucket
+
+functions:
+  disablealarms:
+    handler: alarms_disable.lambda_handler
+    events:
+      - schedule: cron(15 7 * * ? *)
+  enablealarms:
+    handler: alarms_enable.lambda_handler
+    events:
+      - schedule: cron(20 7 * * ? *)
